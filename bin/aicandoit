@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# AI Coderz - When AI agents code and review together
+# AI Can Do It
 # Author: Mike Lopez <e@mikelopez.com>
 # Copyright (C) 2026 Mike Lopez <e@mikelopez.com>
 # SPDX-License-Identifier: GPL-2.0-only
 
 set -euo pipefail
 
-echo "AI Coderz - When AI agents code and review together"
+echo "AI Can Do It"
 echo
 
 # --- Usage ---
 
 usage() {
   cat >&2 <<EOF
-Usage: aicoderz --coder <cli[/model]> --reviewer <cli[/model]> (--branch <name> | --current-branch) <prompt...>
+Usage: aicandoit --coder <cli[/model]> --reviewer <cli[/model]> (--branch <name> | --current-branch) <prompt...>
 
 Options:
   -C, --coder <cli[/model]>      Coder CLI: claude, codex, or cursor; optionally append /model (required)
@@ -293,4 +293,4 @@ run_code_review
 
 review_loop "Code" "$CODE_FILE" run_code_fix run_code_review_loop
 
-echo "AI Coderz are done working together."
+echo "AI Can Do It finished the workflow."

@@ -1,15 +1,15 @@
-# AI Coderz
+# AI Can Do It
 
-AI Coderz is a unified Bash launcher that runs a plan-and-implement loop using any supported coder and reviewer CLI pair:
+AI Can Do It is a unified Bash launcher that runs a plan-and-implement loop using any supported coder and reviewer CLI pair:
 
-- `bin/aicoderz` accepts `--coder` and `--reviewer` flags; accepted values are `claude`, `codex`, and `cursor`, optionally with a model suffix: `cli/model`.
+- `bin/aicandoit` accepts `--coder` and `--reviewer` flags; accepted values are `claude`, `codex`, and `cursor`, optionally with a model suffix: `cli/model`.
 
 - Author: Mike Lopez <e@mikelopez.com>
 - Copyright (C) 2026 Mike Lopez <e@mikelopez.com>
 
 ## What It Does
 
-`aicoderz` follows this control flow:
+`aicandoit` follows this control flow:
 
 1. Accept `--branch <name>` or `--current-branch` plus a prompt.
 2. Switch to the named branch when it exists, create it when it does not, or use the current branch when `--current-branch` is passed.
@@ -65,13 +65,13 @@ cd claudex-coder
 ### 2. Install the launcher
 
 ```bash
-sudo install -m 0755 bin/aicoderz /usr/local/bin/aicoderz
+sudo install -m 0755 bin/aicandoit /usr/local/bin/aicandoit
 ```
 
 If you prefer to run from the repo directly:
 
 ```bash
-chmod +x bin/aicoderz
+chmod +x bin/aicandoit
 ```
 
 #### Legacy launchers
@@ -145,17 +145,17 @@ cursor-agent --version
 ## Usage
 
 ```bash
-aicoderz --coder <cli[/model]> --reviewer <cli[/model]> (--branch <name> | --current-branch) <prompt...>
+aicandoit --coder <cli[/model]> --reviewer <cli[/model]> (--branch <name> | --current-branch) <prompt...>
 ```
 
 Examples:
 
 ```bash
-aicoderz --coder claude --reviewer codex --branch feature/api-caching "add caching to API responses"
-aicoderz -C claude -R cursor -B feature/api-caching "add caching to API responses"
-aicoderz --coder claude --reviewer codex --current-branch "fix the login bug"
-aicoderz --coder cursor/composer-1 --reviewer claude/claude-opus-4-6 --current-branch "add model routing"
-aicoderz --coder claude/claude-sonnet-4-6 --reviewer claude/claude-opus-4-6 --current-branch "add feature"
+aicandoit --coder claude --reviewer codex --branch feature/api-caching "add caching to API responses"
+aicandoit -C claude -R cursor -B feature/api-caching "add caching to API responses"
+aicandoit --coder claude --reviewer codex --current-branch "fix the login bug"
+aicandoit --coder cursor/composer-1 --reviewer claude/claude-opus-4-6 --current-branch "add model routing"
+aicandoit --coder claude/claude-sonnet-4-6 --reviewer claude/claude-opus-4-6 --current-branch "add feature"
 ```
 
 ### Legacy Launchers
