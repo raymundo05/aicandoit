@@ -2,7 +2,7 @@
 
 AI Coderz is a unified Bash launcher that runs a plan-and-implement loop using any supported coder and reviewer CLI pair:
 
-- `bin/aicoderz` accepts `--coder` and `--reviewer` flags; accepted values are `claude`, `codex`, and `cursor`.
+- `bin/aicoderz` accepts `--coder` and `--reviewer` flags; accepted values are `claude`, `codex`, and `cursor`, optionally with a model suffix: `cli/model`.
 
 - Author: Mike Lopez <e@mikelopez.com>
 - Copyright (C) 2026 Mike Lopez <e@mikelopez.com>
@@ -30,10 +30,13 @@ The retry loop is controlled by:
 
 | Flag | Short | Required | Accepted values |
 |---|---|---|---|
-| `--coder` | `-C` | Yes | `claude`, `codex`, `cursor` |
-| `--reviewer` | `-R` | Yes | `claude`, `codex`, `cursor`; must differ from `--coder` |
+| `--coder` | `-C` | Yes | `cli` or `cli/model`; CLIs: `claude`, `codex`, `cursor` |
+| `--reviewer` | `-R` | Yes | `cli` or `cli/model`; CLIs: `claude`, `codex`, `cursor`; must differ from `--coder` |
 | `--branch` | `-B` | Unless `--current-branch` | Branch name to switch to or create |
 | `--current-branch` | | Unless `--branch` | Use the current git branch |
+
+The `cli/model` format passes `--model <model>` to the chosen CLI. When no model is specified the
+CLI uses its own default. For `cursor`, the built-in default is `gpt-5.3-codex-high`.
 
 ## Requirements
 
@@ -139,7 +142,7 @@ cursor-agent --version
 ## Usage
 
 ```bash
-aicoderz --coder <cli> --reviewer <cli> (--branch <name> | --current-branch) <prompt...>
+aicoderz --coder <cli[/model]> --reviewer <cli[/model]> (--branch <name> | --current-branch) <prompt...>
 ```
 
 Examples:
@@ -148,6 +151,7 @@ Examples:
 aicoderz --coder claude --reviewer codex --branch feature/api-caching "add caching to API responses"
 aicoderz -C claude -R cursor -B feature/api-caching "add caching to API responses"
 aicoderz --coder claude --reviewer codex --current-branch "fix the login bug"
+aicoderz --coder cursor/composer-1 --reviewer claude/claude-opus-4-6 --current-branch "add model routing"
 ```
 
 ### Legacy Launchers
