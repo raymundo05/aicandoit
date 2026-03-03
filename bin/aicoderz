@@ -91,7 +91,15 @@ if ! valid_cli "$REVIEWER_CLI"; then
   echo "error: --reviewer must be claude, codex, or cursor (got: $REVIEWER_CLI)" >&2
   usage
 fi
-if [[ "$CODER_CLI" == "$REVIEWER_CLI" && "$CODER_MODEL" == "$REVIEWER_MODEL" ]]; then
+# Normalize effective models for same-CLI comparison.
+# cursor has a built-in default; treat an empty model as that default so
+# cursor/gpt-5.3-codex-high and cursor (no model) are treated as identical.
+_CURSOR_DEFAULT="gpt-5.3-codex-high"
+_CODER_EFF_MODEL="$CODER_MODEL"
+_REVIEWER_EFF_MODEL="$REVIEWER_MODEL"
+[[ "$CODER_CLI"    == "cursor" ]] && _CODER_EFF_MODEL="${CODER_MODEL:-$_CURSOR_DEFAULT}"
+[[ "$REVIEWER_CLI" == "cursor" ]] && _REVIEWER_EFF_MODEL="${REVIEWER_MODEL:-$_CURSOR_DEFAULT}"
+if [[ "$CODER_CLI" == "$REVIEWER_CLI" && "$_CODER_EFF_MODEL" == "$_REVIEWER_EFF_MODEL" ]]; then
   echo "error: coder and reviewer must differ; use different CLIs or different models" >&2
   exit 1
 fi
