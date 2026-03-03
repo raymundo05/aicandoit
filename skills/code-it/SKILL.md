@@ -20,12 +20,13 @@ Implement the approved plan in `.ai/branches/{branch-slug}/plan.md` and commit t
 
 ## Workflow
 
-1. Read `.ai/branches/{branch-slug}/plan.md` fully before editing.
-2. Implement plan steps in order, updating code, tests, and docs as required.
-3. Run relevant checks and tests for changed areas.
-4. Summarize what changed and what validation passed.
-5. Ensure that tests and coding standards pass.
-6. Create a new commit with a Conventional Commit message.
+1. Ensure .ai/branches/{branch-slug} exists before reading .ai/branches/{branch-slug}/plan.md or copying legacy .ai/plan.md.
+2. Read `.ai/branches/{branch-slug}/plan.md` fully before editing.
+3. Implement plan steps in order, updating code, tests, and docs as required.
+4. Run relevant checks and tests for changed areas.
+5. Summarize what changed and what validation passed.
+6. Ensure that tests and coding standards pass.
+7. Create a new commit with a Conventional Commit message.
 
 ## Commit Rules
 
@@ -37,5 +38,6 @@ Implement the approved plan in `.ai/branches/{branch-slug}/plan.md` and commit t
 
 ## Failure Handling
 
+- If .ai/branches/{branch-slug} does not exist, create it.
 - If `.ai/branches/{branch-slug}/plan.md` is missing but legacy `.ai/plan.md` exists, copy legacy content once before implementation.
 - If branch and legacy plan files are both missing, ask the user to run `plan-it` first.
