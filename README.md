@@ -1,25 +1,24 @@
-# ClauDex Coder
+# AI Coderz
 
-ClauDex Coder provides two Bash launchers for running a Claude-led plan and implementation loop with a second reviewer:
+AI Coderz is a unified Bash launcher that runs a plan-and-implement loop using any supported coder and reviewer CLI pair:
 
-- `bin/claudex-coder` pairs Claude with Codex CLI.
-- `bin/claursor-coder` pairs Claude with Cursor Agent.
+- `bin/aicoderz` accepts `--coder` and `--reviewer` flags; accepted values are `claude`, `codex`, and `cursor`.
 
 - Author: Mike Lopez <e@mikelopez.com>
 - Copyright (C) 2026 Mike Lopez <e@mikelopez.com>
 
 ## What It Does
 
-Both launchers follow the same control flow:
+`aicoderz` follows this control flow:
 
-1. Accept an optional branch name plus a prompt.
-2. Use the current branch when the branch argument is empty, or create a new branch when one is provided.
-3. Run Claude with `/plan-it`.
-4. Review the generated plan.
-5. Loop on Claude `/plan-update` plus re-review until `.ai/branches/<branch-slug>/plan-review.md` contains `ALL GOOD`.
-6. Run Claude with `/code-it`.
-7. Review the implementation.
-8. Loop on Claude `/code-fix` plus re-review until `.ai/branches/<branch-slug>/code-review.md` contains `ALL GOOD`.
+1. Accept `--branch <name>` or `--current-branch` plus a prompt.
+2. Switch to the named branch when it exists, create it when it does not, or use the current branch when `--current-branch` is passed.
+3. Run the coder CLI with `/plan-it`.
+4. Run the reviewer CLI on the generated plan.
+5. Loop on the coder CLI with `/plan-update` plus re-review until `.ai/branches/<branch-slug>/plan-review.md` contains `ALL GOOD`.
+6. Run the coder CLI with `/code-it`.
+7. Run the reviewer CLI on the implementation.
+8. Loop on the coder CLI with `/code-fix` plus re-review until `.ai/branches/<branch-slug>/code-review.md` contains `ALL GOOD`.
 9. Stop early if required CLIs are missing from `PATH`.
 
 The retry loop is controlled by:
@@ -27,21 +26,14 @@ The retry loop is controlled by:
 - `MAX_TRIES` with a default of `20`
 - `SLEEP_SECS` with a default of `0.2`
 
-## Launcher Differences
+## CLI Options
 
-### `claudex-coder`
-
-- Requires `codex`
-- Uses `codex --sandbox workspace-write -a never`
-- Runs Codex reviews with `$plan-review` and `$code-review`
-- Reuses the last Codex session with `resume --last` inside review loops
-
-### `claursor-coder`
-
-- Requires `cursor-agent`
-- Uses `cursor-agent --trust --print --model gpt-5.3-codex-high`
-- Runs Cursor reviews with `/plan-review` and `/code-review`
-- Uses `--continue` for follow-up reviews inside review loops
+| Flag | Short | Required | Accepted values |
+|---|---|---|---|
+| `--coder` | `-C` | Yes | `claude`, `codex`, `cursor` |
+| `--reviewer` | `-R` | Yes | `claude`, `codex`, `cursor`; must differ from `--coder` |
+| `--branch` | `-B` | Unless `--current-branch` | Branch name to switch to or create |
+| `--current-branch` | | Unless `--branch` | Use the current git branch |
 
 ## Requirements
 
@@ -51,12 +43,12 @@ Common requirements:
 - `bash`
 - `git`
 - [GitHub CLI (`gh`)](https://cli.github.com/)
-- [Claude CLI](https://docs.anthropic.com/en/docs/claude-code)
 
-Choose the reviewer CLI that matches the launcher you want to use:
+The CLIs required depend on the values you pass to `--coder` and `--reviewer`:
 
-- [Codex CLI](https://developers.openai.com/codex/cli/) for `bin/claudex-coder`
-- `cursor-agent` for `bin/claursor-coder`
+- `claude`: [Claude CLI](https://docs.anthropic.com/en/docs/claude-code)
+- `codex`: [Codex CLI](https://developers.openai.com/codex/cli/)
+- `cursor`: `cursor-agent`
 
 ## Installation
 
@@ -67,18 +59,25 @@ git clone https://github.com/easterncoder/claudex-coder.git
 cd claudex-coder
 ```
 
-### 2. Install one or both launchers
+### 2. Install the launcher
+
+```bash
+sudo install -m 0755 bin/aicoderz /usr/local/bin/aicoderz
+```
+
+If you prefer to run from the repo directly:
+
+```bash
+chmod +x bin/aicoderz
+```
+
+#### Legacy launchers
+
+The original single-CLI launchers are still available if you need them:
 
 ```bash
 sudo install -m 0755 bin/claudex-coder /usr/local/bin/claudex-coder
 sudo install -m 0755 bin/claursor-coder /usr/local/bin/claursor-coder
-```
-
-If you prefer to run them from the repo directly:
-
-```bash
-chmod +x bin/claudex-coder
-chmod +x bin/claursor-coder
 ```
 
 ### 3. Install the shared skills
@@ -130,15 +129,21 @@ cursor-agent --version
 
 ## Usage
 
-Both launchers use the same argument shape:
-
 ```bash
-<launcher> [branch-name] <prompt...>
+aicoderz --coder <cli> --reviewer <cli> (--branch <name> | --current-branch) <prompt...>
 ```
 
-To use the current branch, pass an empty string for `branch-name`.
-
 Examples:
+
+```bash
+aicoderz --coder claude --reviewer codex --branch feature/api-caching "add caching to API responses"
+aicoderz -C claude -R cursor -B feature/api-caching "add caching to API responses"
+aicoderz --coder claude --reviewer codex --current-branch "fix the login bug"
+```
+
+### Legacy Launchers
+
+`claudex-coder` and `claursor-coder` use positional arguments:
 
 ```bash
 claudex-coder "" "add caching to API responses"

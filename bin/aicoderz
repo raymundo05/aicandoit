@@ -1,0 +1,238 @@
+#!/usr/bin/env bash
+# AI Coderz - When AI agents code and review together
+# Author: Mike Lopez <e@mikelopez.com>
+# Copyright (C) 2026 Mike Lopez <e@mikelopez.com>
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -euo pipefail
+
+echo "AI Coderz - When AI agents code and review together"
+echo
+
+# --- Usage ---
+
+usage() {
+  cat >&2 <<EOF
+Usage: aicoderz --coder <cli> --reviewer <cli> (--branch <name> | --current-branch) <prompt...>
+
+Options:
+  -C, --coder <cli>      Coder CLI: claude, codex, or cursor (required)
+  -R, --reviewer <cli>   Reviewer CLI: claude, codex, or cursor; must differ from --coder (required)
+  -B, --branch <name>    Branch to switch to or create
+      --current-branch   Use the current git branch
+EOF
+  exit 1
+}
+
+# --- Argument parsing ---
+
+CODER=""
+REVIEWER=""
+BRANCH=""
+USE_CURRENT_BRANCH=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --coder|-C)       CODER="$2";    shift 2 ;;
+    --reviewer|-R)    REVIEWER="$2"; shift 2 ;;
+    --branch|-B)      BRANCH="$2";   shift 2 ;;
+    --current-branch) USE_CURRENT_BRANCH=true; shift ;;
+    --) shift; break ;;
+    *) break ;;
+  esac
+done
+
+PROMPT="$*"
+
+# --- Validation ---
+
+valid_cli() { [[ "$1" == "claude" || "$1" == "codex" || "$1" == "cursor" ]]; }
+
+if ! valid_cli "$CODER"; then
+  echo "error: --coder must be claude, codex, or cursor" >&2
+  usage
+fi
+if ! valid_cli "$REVIEWER"; then
+  echo "error: --reviewer must be claude, codex, or cursor" >&2
+  usage
+fi
+if [[ "$CODER" == "$REVIEWER" ]]; then
+  echo "error: coder and reviewer must be different CLIs" >&2
+  exit 1
+fi
+if [[ -n "$BRANCH" && "$USE_CURRENT_BRANCH" == true ]]; then
+  echo "error: --branch and --current-branch are mutually exclusive" >&2
+  exit 1
+fi
+if [[ -z "$BRANCH" && "$USE_CURRENT_BRANCH" == false ]]; then
+  echo "error: pass --branch <name> or --current-branch" >&2
+  usage
+fi
+if [[ -z "$PROMPT" ]]; then
+  echo "error: prompt is required" >&2
+  usage
+fi
+
+echo "Coder:    $CODER"
+echo "Reviewer: $REVIEWER"
+echo "Prompt:   $PROMPT"
+echo
+
+# --- Dependency checks ---
+
+command -v git >/dev/null || { echo "git not found in PATH" >&2; exit 127; }
+command -v gh  >/dev/null || { echo "gh not found in PATH"  >&2; exit 127; }
+if [[ "$CODER" == "claude" || "$REVIEWER" == "claude" ]]; then
+  command -v claude >/dev/null || { echo "claude not found in PATH" >&2; exit 127; }
+fi
+if [[ "$CODER" == "codex" || "$REVIEWER" == "codex" ]]; then
+  command -v codex >/dev/null || { echo "codex not found in PATH" >&2; exit 127; }
+fi
+if [[ "$CODER" == "cursor" || "$REVIEWER" == "cursor" ]]; then
+  command -v cursor-agent >/dev/null || { echo "cursor-agent not found in PATH" >&2; exit 127; }
+fi
+
+# --- Constants ---
+
+MAX_TRIES="${MAX_TRIES:-20}"
+SLEEP_SECS="${SLEEP_SECS:-0.2}"
+CODEX_BASE_ARGS="--sandbox workspace-write -a never"
+CURSOR_BASE_ARGS="--trust --print --model gpt-5.3-codex-high"
+
+# --- Coder functions ---
+
+run_plan() {
+  case "$CODER" in
+    claude) claude -p "/plan-it $PROMPT" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS exec "/plan-it $PROMPT" >/dev/null 2>&1 ;;
+    cursor) cursor-agent $CURSOR_BASE_ARGS "/plan-it $PROMPT" >/dev/null 2>&1 ;;
+  esac
+}
+
+run_plan_update() {
+  case "$CODER" in
+    claude) claude -c -p "/plan-update" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS exec resume --last "/plan-update" >/dev/null 2>&1 ;;
+    cursor) cursor-agent $CURSOR_BASE_ARGS --continue '/plan-update' >/dev/null 2>&1 ;;
+  esac
+}
+
+run_code() {
+  case "$CODER" in
+    claude) claude -c -p "/code-it" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS exec resume --last "/code-it" >/dev/null 2>&1 ;;
+    cursor) cursor-agent $CURSOR_BASE_ARGS --continue '/code-it' >/dev/null 2>&1 ;;
+  esac
+}
+
+run_code_fix() {
+  case "$CODER" in
+    claude) claude -c -p "/code-fix" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS exec resume --last "/code-fix" >/dev/null 2>&1 ;;
+    cursor) cursor-agent $CURSOR_BASE_ARGS --continue '/code-fix' >/dev/null 2>&1 ;;
+  esac
+}
+
+# --- Reviewer functions ---
+
+run_plan_review() {
+  case "$REVIEWER" in
+    claude) claude -p "/plan-review" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS exec '$plan-review' >/dev/null 2>&1 ;;
+    cursor) cursor-agent $CURSOR_BASE_ARGS '/plan-review' >/dev/null 2>&1 ;;
+  esac
+}
+
+run_plan_review_loop() {
+  case "$REVIEWER" in
+    claude) claude -c -p "/plan-review" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS exec resume --last '$plan-review' >/dev/null 2>&1 ;;
+    cursor) cursor-agent $CURSOR_BASE_ARGS --continue '/plan-review' >/dev/null 2>&1 ;;
+  esac
+}
+
+run_code_review() {
+  case "$REVIEWER" in
+    claude) claude -c -p "/code-review" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS exec resume --last '$code-review' >/dev/null 2>&1 ;;
+    cursor) cursor-agent $CURSOR_BASE_ARGS --continue '/code-review' >/dev/null 2>&1 ;;
+  esac
+}
+
+run_code_review_loop() {
+  case "$REVIEWER" in
+    claude) claude -c -p "/code-review" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS exec resume --last '$code-review' >/dev/null 2>&1 ;;
+    cursor) cursor-agent $CURSOR_BASE_ARGS --continue '/code-review' >/dev/null 2>&1 ;;
+  esac
+}
+
+# --- Review loop ---
+
+review_loop() {
+  local label="$1"
+  local file="$2"
+  local update_fn="$3"
+  local review_fn="$4"
+  local tries=0
+
+  echo "$label review loop started..."
+  until [[ -f "$file" ]] && grep -q 'ALL GOOD' "$file"; do
+    tries=$((tries + 1))
+    if (( tries >= MAX_TRIES )); then
+      echo "Gave up after $MAX_TRIES tries (no 'ALL GOOD' in $file)" >&2
+      exit 2
+    fi
+    echo "- Loop: $tries"
+    echo "- Coder is updating $label..."
+    "$update_fn"
+    echo "- Reviewer is re-checking $label..."
+    "$review_fn"
+    sleep "$SLEEP_SECS"
+  done
+  echo "$label is good!"
+}
+
+# --- Branch resolution ---
+
+if [[ "$USE_CURRENT_BRANCH" == true ]]; then
+  BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  if [[ "$BRANCH" == "HEAD" ]]; then
+    BRANCH="detached-$(git rev-parse --short HEAD)"
+  fi
+  echo "Using current branch: $BRANCH"
+else
+  if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    echo "Switching to branch: $BRANCH"
+    git checkout "$BRANCH"
+  else
+    echo "Creating branch: $BRANCH"
+    git checkout -b "$BRANCH"
+  fi
+fi
+
+BRANCH_PATH="${BRANCH//\//_}"
+PLAN_FILE=".ai/branches/${BRANCH_PATH}/plan-review.md"
+CODE_FILE=".ai/branches/${BRANCH_PATH}/code-review.md"
+
+# --- Main workflow ---
+
+echo
+echo "Coder is planning..."
+run_plan
+
+echo "Reviewer is reviewing the plan..."
+run_plan_review
+
+review_loop "Plan" "$PLAN_FILE" run_plan_update run_plan_review_loop
+
+echo
+echo "Coder is implementing..."
+run_code
+
+echo "Reviewer is reviewing the code..."
+run_code_review
+
+review_loop "Code" "$CODE_FILE" run_code_fix run_code_review_loop
+
+echo "AI Coderz are done working together."
