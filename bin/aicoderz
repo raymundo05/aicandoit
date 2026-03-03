@@ -132,44 +132,54 @@ fi
 MAX_TRIES="${MAX_TRIES:-20}"
 SLEEP_SECS="${SLEEP_SECS:-0.2}"
 CODEX_BASE_ARGS="--sandbox workspace-write -a never"
-CODER_CURSOR_ARGS="--trust --print --model ${CODER_MODEL:-gpt-5.3-codex-high}"
-REVIEWER_CURSOR_ARGS="--trust --print --model ${REVIEWER_MODEL:-gpt-5.3-codex-high}"
-CODER_CLAUDE_MODEL="${CODER_MODEL:+--model $CODER_MODEL}"
-REVIEWER_CLAUDE_MODEL="${REVIEWER_MODEL:+--model $REVIEWER_MODEL}"
-CODER_CODEX_MODEL="${CODER_MODEL:+--model $CODER_MODEL}"
-REVIEWER_CODEX_MODEL="${REVIEWER_MODEL:+--model $REVIEWER_MODEL}"
+CODER_CURSOR_ARGS=(--trust --print --model "${CODER_MODEL:-gpt-5.3-codex-high}")
+REVIEWER_CURSOR_ARGS=(--trust --print --model "${REVIEWER_MODEL:-gpt-5.3-codex-high}")
+if [[ -n "$CODER_MODEL" ]]; then
+  CODER_CLAUDE_MODEL=(--model "$CODER_MODEL")
+  CODER_CODEX_MODEL=(--model "$CODER_MODEL")
+else
+  CODER_CLAUDE_MODEL=()
+  CODER_CODEX_MODEL=()
+fi
+if [[ -n "$REVIEWER_MODEL" ]]; then
+  REVIEWER_CLAUDE_MODEL=(--model "$REVIEWER_MODEL")
+  REVIEWER_CODEX_MODEL=(--model "$REVIEWER_MODEL")
+else
+  REVIEWER_CLAUDE_MODEL=()
+  REVIEWER_CODEX_MODEL=()
+fi
 
 # --- Coder functions ---
 
 run_plan() {
   case "$CODER_CLI" in
-    claude) claude $CODER_CLAUDE_MODEL -p "/plan-it $PROMPT" >/dev/null 2>&1 ;;
-    codex)  codex $CODEX_BASE_ARGS $CODER_CODEX_MODEL exec "\$plan-it $PROMPT" >/dev/null 2>&1 ;;
-    cursor) cursor-agent $CODER_CURSOR_ARGS "/plan-it $PROMPT" >/dev/null 2>&1 ;;
+    claude) claude "${CODER_CLAUDE_MODEL[@]}" -p "/plan-it $PROMPT" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS "${CODER_CODEX_MODEL[@]}" exec "\$plan-it $PROMPT" >/dev/null 2>&1 ;;
+    cursor) cursor-agent "${CODER_CURSOR_ARGS[@]}" "/plan-it $PROMPT" >/dev/null 2>&1 ;;
   esac
 }
 
 run_plan_update() {
   case "$CODER_CLI" in
-    claude) claude $CODER_CLAUDE_MODEL -c -p "/plan-update" >/dev/null 2>&1 ;;
-    codex)  codex $CODEX_BASE_ARGS $CODER_CODEX_MODEL exec resume --last '$plan-update' >/dev/null 2>&1 ;;
-    cursor) cursor-agent $CODER_CURSOR_ARGS --continue '/plan-update' >/dev/null 2>&1 ;;
+    claude) claude "${CODER_CLAUDE_MODEL[@]}" -c -p "/plan-update" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS "${CODER_CODEX_MODEL[@]}" exec resume --last '$plan-update' >/dev/null 2>&1 ;;
+    cursor) cursor-agent "${CODER_CURSOR_ARGS[@]}" --continue '/plan-update' >/dev/null 2>&1 ;;
   esac
 }
 
 run_code() {
   case "$CODER_CLI" in
-    claude) claude $CODER_CLAUDE_MODEL -c -p "/code-it" >/dev/null 2>&1 ;;
-    codex)  codex $CODEX_BASE_ARGS $CODER_CODEX_MODEL exec resume --last '$code-it' >/dev/null 2>&1 ;;
-    cursor) cursor-agent $CODER_CURSOR_ARGS --continue '/code-it' >/dev/null 2>&1 ;;
+    claude) claude "${CODER_CLAUDE_MODEL[@]}" -c -p "/code-it" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS "${CODER_CODEX_MODEL[@]}" exec resume --last '$code-it' >/dev/null 2>&1 ;;
+    cursor) cursor-agent "${CODER_CURSOR_ARGS[@]}" --continue '/code-it' >/dev/null 2>&1 ;;
   esac
 }
 
 run_code_fix() {
   case "$CODER_CLI" in
-    claude) claude $CODER_CLAUDE_MODEL -c -p "/code-fix" >/dev/null 2>&1 ;;
-    codex)  codex $CODEX_BASE_ARGS $CODER_CODEX_MODEL exec resume --last '$code-fix' >/dev/null 2>&1 ;;
-    cursor) cursor-agent $CODER_CURSOR_ARGS --continue '/code-fix' >/dev/null 2>&1 ;;
+    claude) claude "${CODER_CLAUDE_MODEL[@]}" -c -p "/code-fix" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS "${CODER_CODEX_MODEL[@]}" exec resume --last '$code-fix' >/dev/null 2>&1 ;;
+    cursor) cursor-agent "${CODER_CURSOR_ARGS[@]}" --continue '/code-fix' >/dev/null 2>&1 ;;
   esac
 }
 
@@ -177,33 +187,33 @@ run_code_fix() {
 
 run_plan_review() {
   case "$REVIEWER_CLI" in
-    claude) claude $REVIEWER_CLAUDE_MODEL -p "/plan-review" >/dev/null 2>&1 ;;
-    codex)  codex $CODEX_BASE_ARGS $REVIEWER_CODEX_MODEL exec '$plan-review' >/dev/null 2>&1 ;;
-    cursor) cursor-agent $REVIEWER_CURSOR_ARGS '/plan-review' >/dev/null 2>&1 ;;
+    claude) claude "${REVIEWER_CLAUDE_MODEL[@]}" -p "/plan-review" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS "${REVIEWER_CODEX_MODEL[@]}" exec '$plan-review' >/dev/null 2>&1 ;;
+    cursor) cursor-agent "${REVIEWER_CURSOR_ARGS[@]}" '/plan-review' >/dev/null 2>&1 ;;
   esac
 }
 
 run_plan_review_loop() {
   case "$REVIEWER_CLI" in
-    claude) claude $REVIEWER_CLAUDE_MODEL -c -p "/plan-review" >/dev/null 2>&1 ;;
-    codex)  codex $CODEX_BASE_ARGS $REVIEWER_CODEX_MODEL exec resume --last '$plan-review' >/dev/null 2>&1 ;;
-    cursor) cursor-agent $REVIEWER_CURSOR_ARGS --continue '/plan-review' >/dev/null 2>&1 ;;
+    claude) claude "${REVIEWER_CLAUDE_MODEL[@]}" -c -p "/plan-review" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS "${REVIEWER_CODEX_MODEL[@]}" exec resume --last '$plan-review' >/dev/null 2>&1 ;;
+    cursor) cursor-agent "${REVIEWER_CURSOR_ARGS[@]}" --continue '/plan-review' >/dev/null 2>&1 ;;
   esac
 }
 
 run_code_review() {
   case "$REVIEWER_CLI" in
-    claude) claude $REVIEWER_CLAUDE_MODEL -c -p "/code-review" >/dev/null 2>&1 ;;
-    codex)  codex $CODEX_BASE_ARGS $REVIEWER_CODEX_MODEL exec resume --last '$code-review' >/dev/null 2>&1 ;;
-    cursor) cursor-agent $REVIEWER_CURSOR_ARGS --continue '/code-review' >/dev/null 2>&1 ;;
+    claude) claude "${REVIEWER_CLAUDE_MODEL[@]}" -c -p "/code-review" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS "${REVIEWER_CODEX_MODEL[@]}" exec resume --last '$code-review' >/dev/null 2>&1 ;;
+    cursor) cursor-agent "${REVIEWER_CURSOR_ARGS[@]}" --continue '/code-review' >/dev/null 2>&1 ;;
   esac
 }
 
 run_code_review_loop() {
   case "$REVIEWER_CLI" in
-    claude) claude $REVIEWER_CLAUDE_MODEL -c -p "/code-review" >/dev/null 2>&1 ;;
-    codex)  codex $CODEX_BASE_ARGS $REVIEWER_CODEX_MODEL exec resume --last '$code-review' >/dev/null 2>&1 ;;
-    cursor) cursor-agent $REVIEWER_CURSOR_ARGS --continue '/code-review' >/dev/null 2>&1 ;;
+    claude) claude "${REVIEWER_CLAUDE_MODEL[@]}" -c -p "/code-review" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS "${REVIEWER_CODEX_MODEL[@]}" exec resume --last '$code-review' >/dev/null 2>&1 ;;
+    cursor) cursor-agent "${REVIEWER_CURSOR_ARGS[@]}" --continue '/code-review' >/dev/null 2>&1 ;;
   esac
 }
 

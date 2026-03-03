@@ -121,15 +121,18 @@ If you pass `--coder cursor` or `--reviewer cursor`, make sure your `cursor-agen
 
 ## Setup Check
 
-Verify the common CLIs:
+Verify the always-required CLIs:
 
 ```bash
 git --version
 gh --version
-claude --version
 ```
 
-Verify the reviewer CLI for the launcher you plan to run:
+Verify each CLI you plan to pass to `--coder` or `--reviewer`:
+
+```bash
+claude --version
+```
 
 ```bash
 codex --version
