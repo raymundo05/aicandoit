@@ -54,6 +54,7 @@ validate_cli_model() {
     [[ -z "$model" ]] && { echo "error: $flag model part cannot be empty when slash is used" >&2; usage; }
     [[ "$model" == */* ]] && { echo "error: $flag value may only contain one slash (cli/model)" >&2; usage; }
   fi
+  return 0
 }
 
 # Normalize a model string for CLI comparison.
@@ -120,7 +121,8 @@ while [[ $# -gt 0 ]]; do
       BRANCH="$2"; shift 2 ;;
     --current-branch) USE_CURRENT_BRANCH=true; shift ;;
     --) shift; break ;;
-    *) break ;;
+    -*) echo "error: unknown option: $1" >&2; usage ;;
+    *)  break ;;
   esac
 done
 
