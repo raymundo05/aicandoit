@@ -11,23 +11,90 @@ echo
 
 # --- Usage ---
 
+# Print usage and exit.
 usage() {
   cat >&2 <<EOF
-Usage: aicandoit --coder <cli[/model]> --reviewer <cli[/model]> (--branch <name> | --current-branch) <prompt...>
+Usage: aicandoit --coder <cli[/model]> --reviewer <cli[/model]> [--planner <cli[/model]>] (--branch <name> | --current-branch) <prompt...>
 
 Options:
   -C, --coder <cli[/model]>      Coder CLI: claude, codex, or cursor; optionally append /model (required)
-  -R, --reviewer <cli[/model]>   Reviewer CLI: claude, codex, or cursor; optionally append /model; must differ from --coder by CLI or model (required)
+  -R, --reviewer <cli[/model]>   Reviewer CLI: claude, codex, or cursor; optionally append /model; must differ from --coder and --planner by CLI or effective model (required)
+  -P, --planner <cli[/model]>    Planner CLI: claude, codex, or cursor; optionally append /model; defaults to --coder
   -B, --branch <name>            Branch to switch to or create
       --current-branch           Use the current git branch
 EOF
   exit 1
 }
 
+# Split a cli[/model] string into CLI and model parts.
+split_cli_model() {
+  local value="$1"
+  local cli_var="$2"
+  local model_var="$3"
+
+  if [[ "$value" == */* ]]; then
+    printf -v "$cli_var" '%s' "${value%%/*}"
+    printf -v "$model_var" '%s' "${value#*/}"
+  else
+    printf -v "$cli_var" '%s' "$value"
+    printf -v "$model_var" '%s' ""
+  fi
+}
+
+# Validate cli[/model] formatting when a slash is present.
+validate_cli_model() {
+  local flag="$1"
+  local value="$2"
+  local cli="$3"
+  local model="$4"
+
+  if [[ "$value" == */* ]]; then
+    [[ -z "$cli" ]] && { echo "error: $flag CLI part cannot be empty" >&2; usage; }
+    [[ -z "$model" ]] && { echo "error: $flag model part cannot be empty when slash is used" >&2; usage; }
+    [[ "$model" == */* ]] && { echo "error: $flag value may only contain one slash (cli/model)" >&2; usage; }
+  fi
+}
+
+# Normalize a model string for CLI comparison.
+effective_model() {
+  local cli="$1"
+  local model="$2"
+
+  if [[ "$cli" == "cursor" ]]; then
+    printf '%s' "${model:-$_CURSOR_DEFAULT}"
+  else
+    printf '%s' "$model"
+  fi
+}
+
+# Build model args for claude and codex.
+build_model_args() {
+  local model="$1"
+  local -n claude_args="$2"
+  local -n codex_args="$3"
+
+  if [[ -n "$model" ]]; then
+    claude_args=(--model "$model")
+    codex_args=(--model "$model")
+  else
+    claude_args=()
+    codex_args=()
+  fi
+}
+
+# Build cursor args with the default model fallback.
+build_cursor_args() {
+  local model="$1"
+  local -n cursor_args="$2"
+
+  cursor_args=(--trust --print --model "${model:-$_CURSOR_DEFAULT}")
+}
+
 # --- Argument parsing ---
 
 CODER=""
 REVIEWER=""
+PLANNER=""
 BRANCH=""
 USE_CURRENT_BRANCH=false
 
@@ -39,6 +106,9 @@ while [[ $# -gt 0 ]]; do
     --reviewer|-R)
       [[ $# -gt 1 ]] || { echo "error: --reviewer requires a value" >&2; usage; }
       REVIEWER="$2"; shift 2 ;;
+    --planner|-P)
+      [[ $# -gt 1 ]] || { echo "error: --planner requires a value" >&2; usage; }
+      PLANNER="$2"; shift 2 ;;
     --branch|-B)
       [[ $# -gt 1 ]] || { echo "error: --branch requires a value" >&2; usage; }
       BRANCH="$2"; shift 2 ;;
@@ -50,41 +120,31 @@ done
 
 PROMPT="$*"
 
-# Extract optional model from cli/model format
-if [[ "$CODER" == */* ]]; then
-  CODER_CLI="${CODER%%/*}"
-  CODER_MODEL="${CODER#*/}"
-else
-  CODER_CLI="$CODER"
-  CODER_MODEL=""
+if [[ -z "$PLANNER" ]]; then
+  PLANNER="$CODER"
 fi
 
-if [[ "$REVIEWER" == */* ]]; then
-  REVIEWER_CLI="${REVIEWER%%/*}"
-  REVIEWER_MODEL="${REVIEWER#*/}"
-else
-  REVIEWER_CLI="$REVIEWER"
-  REVIEWER_MODEL=""
-fi
+# Extract optional model from cli/model format
+split_cli_model "$CODER" CODER_CLI CODER_MODEL
+split_cli_model "$PLANNER" PLANNER_CLI PLANNER_MODEL
+split_cli_model "$REVIEWER" REVIEWER_CLI REVIEWER_MODEL
 
 # Reject malformed cli/model values
-if [[ "$CODER" == */* ]]; then
-  [[ -z "$CODER_CLI" ]]       && { echo "error: --coder CLI part cannot be empty" >&2; usage; }
-  [[ -z "$CODER_MODEL" ]]     && { echo "error: --coder model part cannot be empty when slash is used" >&2; usage; }
-  [[ "$CODER_MODEL" == */* ]] && { echo "error: --coder value may only contain one slash (cli/model)" >&2; usage; }
-fi
-if [[ "$REVIEWER" == */* ]]; then
-  [[ -z "$REVIEWER_CLI" ]]       && { echo "error: --reviewer CLI part cannot be empty" >&2; usage; }
-  [[ -z "$REVIEWER_MODEL" ]]     && { echo "error: --reviewer model part cannot be empty when slash is used" >&2; usage; }
-  [[ "$REVIEWER_MODEL" == */* ]] && { echo "error: --reviewer value may only contain one slash (cli/model)" >&2; usage; }
-fi
+validate_cli_model --coder "$CODER" "$CODER_CLI" "$CODER_MODEL"
+validate_cli_model --planner "$PLANNER" "$PLANNER_CLI" "$PLANNER_MODEL"
+validate_cli_model --reviewer "$REVIEWER" "$REVIEWER_CLI" "$REVIEWER_MODEL"
 
 # --- Validation ---
 
+# Check that a CLI name is supported.
 valid_cli() { [[ "$1" == "claude" || "$1" == "codex" || "$1" == "cursor" ]]; }
 
 if ! valid_cli "$CODER_CLI"; then
   echo "error: --coder must be claude, codex, or cursor (got: $CODER_CLI)" >&2
+  usage
+fi
+if ! valid_cli "$PLANNER_CLI"; then
+  echo "error: --planner must be claude, codex, or cursor (got: $PLANNER_CLI)" >&2
   usage
 fi
 if ! valid_cli "$REVIEWER_CLI"; then
@@ -95,13 +155,20 @@ fi
 # cursor has a built-in default; treat an empty model as that default so
 # cursor/gpt-5.3-codex-high and cursor (no model) are treated as identical.
 _CURSOR_DEFAULT="gpt-5.3-codex-high"
-_CODER_EFF_MODEL="$CODER_MODEL"
-_REVIEWER_EFF_MODEL="$REVIEWER_MODEL"
-[[ "$CODER_CLI"    == "cursor" ]] && _CODER_EFF_MODEL="${CODER_MODEL:-$_CURSOR_DEFAULT}"
-[[ "$REVIEWER_CLI" == "cursor" ]] && _REVIEWER_EFF_MODEL="${REVIEWER_MODEL:-$_CURSOR_DEFAULT}"
+_CODER_EFF_MODEL="$(effective_model "$CODER_CLI" "$CODER_MODEL")"
+_PLANNER_EFF_MODEL="$(effective_model "$PLANNER_CLI" "$PLANNER_MODEL")"
+_REVIEWER_EFF_MODEL="$(effective_model "$REVIEWER_CLI" "$REVIEWER_MODEL")"
 if [[ "$CODER_CLI" == "$REVIEWER_CLI" && "$_CODER_EFF_MODEL" == "$_REVIEWER_EFF_MODEL" ]]; then
   echo "error: coder and reviewer must differ; use different CLIs or different models" >&2
   exit 1
+fi
+if [[ "$PLANNER_CLI" == "$REVIEWER_CLI" && "$_PLANNER_EFF_MODEL" == "$_REVIEWER_EFF_MODEL" ]]; then
+  echo "error: planner and reviewer must differ; use different CLIs or different models" >&2
+  exit 1
+fi
+PLANNER_MATCHES_CODER=false
+if [[ "$PLANNER_CLI" == "$CODER_CLI" && "$_PLANNER_EFF_MODEL" == "$_CODER_EFF_MODEL" ]]; then
+  PLANNER_MATCHES_CODER=true
 fi
 if [[ -n "$BRANCH" && "$USE_CURRENT_BRANCH" == true ]]; then
   echo "error: --branch and --current-branch are mutually exclusive" >&2
@@ -117,6 +184,7 @@ if [[ -z "$PROMPT" ]]; then
 fi
 
 echo "Coder:    ${CODER_CLI}${CODER_MODEL:+ (model: $CODER_MODEL)}"
+echo "Planner:  ${PLANNER_CLI}${PLANNER_MODEL:+ (model: $PLANNER_MODEL)}"
 echo "Reviewer: ${REVIEWER_CLI}${REVIEWER_MODEL:+ (model: $REVIEWER_MODEL)}"
 echo "Prompt:   $PROMPT"
 echo
@@ -125,13 +193,13 @@ echo
 
 command -v git >/dev/null || { echo "git not found in PATH" >&2; exit 127; }
 command -v gh  >/dev/null || { echo "gh not found in PATH"  >&2; exit 127; }
-if [[ "$CODER_CLI" == "claude" || "$REVIEWER_CLI" == "claude" ]]; then
+if [[ "$CODER_CLI" == "claude" || "$PLANNER_CLI" == "claude" || "$REVIEWER_CLI" == "claude" ]]; then
   command -v claude >/dev/null || { echo "claude not found in PATH" >&2; exit 127; }
 fi
-if [[ "$CODER_CLI" == "codex" || "$REVIEWER_CLI" == "codex" ]]; then
+if [[ "$CODER_CLI" == "codex" || "$PLANNER_CLI" == "codex" || "$REVIEWER_CLI" == "codex" ]]; then
   command -v codex >/dev/null || { echo "codex not found in PATH" >&2; exit 127; }
 fi
-if [[ "$CODER_CLI" == "cursor" || "$REVIEWER_CLI" == "cursor" ]]; then
+if [[ "$CODER_CLI" == "cursor" || "$PLANNER_CLI" == "cursor" || "$REVIEWER_CLI" == "cursor" ]]; then
   command -v cursor-agent >/dev/null || { echo "cursor-agent not found in PATH" >&2; exit 127; }
 fi
 
@@ -140,49 +208,51 @@ fi
 MAX_TRIES="${MAX_TRIES:-20}"
 SLEEP_SECS="${SLEEP_SECS:-0.2}"
 CODEX_BASE_ARGS="--sandbox workspace-write -a never"
-CODER_CURSOR_ARGS=(--trust --print --model "${CODER_MODEL:-gpt-5.3-codex-high}")
-REVIEWER_CURSOR_ARGS=(--trust --print --model "${REVIEWER_MODEL:-gpt-5.3-codex-high}")
-if [[ -n "$CODER_MODEL" ]]; then
-  CODER_CLAUDE_MODEL=(--model "$CODER_MODEL")
-  CODER_CODEX_MODEL=(--model "$CODER_MODEL")
-else
-  CODER_CLAUDE_MODEL=()
-  CODER_CODEX_MODEL=()
-fi
-if [[ -n "$REVIEWER_MODEL" ]]; then
-  REVIEWER_CLAUDE_MODEL=(--model "$REVIEWER_MODEL")
-  REVIEWER_CODEX_MODEL=(--model "$REVIEWER_MODEL")
-else
-  REVIEWER_CLAUDE_MODEL=()
-  REVIEWER_CODEX_MODEL=()
-fi
+build_cursor_args "$CODER_MODEL" CODER_CURSOR_ARGS
+build_cursor_args "$PLANNER_MODEL" PLANNER_CURSOR_ARGS
+build_cursor_args "$REVIEWER_MODEL" REVIEWER_CURSOR_ARGS
+build_model_args "$CODER_MODEL" CODER_CLAUDE_MODEL CODER_CODEX_MODEL
+build_model_args "$PLANNER_MODEL" PLANNER_CLAUDE_MODEL PLANNER_CODEX_MODEL
+build_model_args "$REVIEWER_MODEL" REVIEWER_CLAUDE_MODEL REVIEWER_CODEX_MODEL
 
 # --- Coder functions ---
 
+# Run the initial plan step using the planner role.
 run_plan() {
-  case "$CODER_CLI" in
-    claude) claude "${CODER_CLAUDE_MODEL[@]}" -p "/plan-it $PROMPT" >/dev/null 2>&1 ;;
-    codex)  codex $CODEX_BASE_ARGS "${CODER_CODEX_MODEL[@]}" exec "\$plan-it $PROMPT" >/dev/null 2>&1 ;;
-    cursor) cursor-agent "${CODER_CURSOR_ARGS[@]}" "/plan-it $PROMPT" >/dev/null 2>&1 ;;
+  case "$PLANNER_CLI" in
+    claude) claude "${PLANNER_CLAUDE_MODEL[@]}" -p "/plan-it $PROMPT" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS "${PLANNER_CODEX_MODEL[@]}" exec "\$plan-it $PROMPT" >/dev/null 2>&1 ;;
+    cursor) cursor-agent "${PLANNER_CURSOR_ARGS[@]}" "/plan-it $PROMPT" >/dev/null 2>&1 ;;
   esac
 }
 
+# Update the plan using the planner role.
 run_plan_update() {
-  case "$CODER_CLI" in
-    claude) claude "${CODER_CLAUDE_MODEL[@]}" -c -p "/plan-update" >/dev/null 2>&1 ;;
-    codex)  codex $CODEX_BASE_ARGS "${CODER_CODEX_MODEL[@]}" exec resume --last '$plan-update' >/dev/null 2>&1 ;;
-    cursor) cursor-agent "${CODER_CURSOR_ARGS[@]}" --continue '/plan-update' >/dev/null 2>&1 ;;
+  case "$PLANNER_CLI" in
+    claude) claude "${PLANNER_CLAUDE_MODEL[@]}" -c -p "/plan-update" >/dev/null 2>&1 ;;
+    codex)  codex $CODEX_BASE_ARGS "${PLANNER_CODEX_MODEL[@]}" exec resume --last '$plan-update' >/dev/null 2>&1 ;;
+    cursor) cursor-agent "${PLANNER_CURSOR_ARGS[@]}" --continue '/plan-update' >/dev/null 2>&1 ;;
   esac
 }
 
+# Run the code step using the coder role.
 run_code() {
-  case "$CODER_CLI" in
-    claude) claude "${CODER_CLAUDE_MODEL[@]}" -c -p "/code-it" >/dev/null 2>&1 ;;
-    codex)  codex $CODEX_BASE_ARGS "${CODER_CODEX_MODEL[@]}" exec resume --last '$code-it' >/dev/null 2>&1 ;;
-    cursor) cursor-agent "${CODER_CURSOR_ARGS[@]}" --continue '/code-it' >/dev/null 2>&1 ;;
-  esac
+  if [[ "$PLANNER_MATCHES_CODER" == true ]]; then
+    case "$CODER_CLI" in
+      claude) claude "${CODER_CLAUDE_MODEL[@]}" -c -p "/code-it" >/dev/null 2>&1 ;;
+      codex)  codex $CODEX_BASE_ARGS "${CODER_CODEX_MODEL[@]}" exec resume --last '$code-it' >/dev/null 2>&1 ;;
+      cursor) cursor-agent "${CODER_CURSOR_ARGS[@]}" --continue '/code-it' >/dev/null 2>&1 ;;
+    esac
+  else
+    case "$CODER_CLI" in
+      claude) claude "${CODER_CLAUDE_MODEL[@]}" -p "/code-it" >/dev/null 2>&1 ;;
+      codex)  codex $CODEX_BASE_ARGS "${CODER_CODEX_MODEL[@]}" exec '$code-it' >/dev/null 2>&1 ;;
+      cursor) cursor-agent "${CODER_CURSOR_ARGS[@]}" '/code-it' >/dev/null 2>&1 ;;
+    esac
+  fi
 }
 
+# Run the code fix step using the coder role.
 run_code_fix() {
   case "$CODER_CLI" in
     claude) claude "${CODER_CLAUDE_MODEL[@]}" -c -p "/code-fix" >/dev/null 2>&1 ;;
@@ -193,6 +263,7 @@ run_code_fix() {
 
 # --- Reviewer functions ---
 
+# Run the initial plan review using the reviewer role.
 run_plan_review() {
   case "$REVIEWER_CLI" in
     claude) claude "${REVIEWER_CLAUDE_MODEL[@]}" -p "/plan-review" >/dev/null 2>&1 ;;
@@ -201,6 +272,7 @@ run_plan_review() {
   esac
 }
 
+# Re-run plan review in the review loop using the reviewer role.
 run_plan_review_loop() {
   case "$REVIEWER_CLI" in
     claude) claude "${REVIEWER_CLAUDE_MODEL[@]}" -c -p "/plan-review" >/dev/null 2>&1 ;;
@@ -209,6 +281,7 @@ run_plan_review_loop() {
   esac
 }
 
+# Run the initial code review using the reviewer role.
 run_code_review() {
   case "$REVIEWER_CLI" in
     claude) claude "${REVIEWER_CLAUDE_MODEL[@]}" -c -p "/code-review" >/dev/null 2>&1 ;;
@@ -217,6 +290,7 @@ run_code_review() {
   esac
 }
 
+# Re-run code review in the review loop using the reviewer role.
 run_code_review_loop() {
   case "$REVIEWER_CLI" in
     claude) claude "${REVIEWER_CLAUDE_MODEL[@]}" -c -p "/code-review" >/dev/null 2>&1 ;;
@@ -227,11 +301,13 @@ run_code_review_loop() {
 
 # --- Review loop ---
 
+# Run the review loop until the review file is marked ALL GOOD.
 review_loop() {
   local label="$1"
   local file="$2"
   local update_fn="$3"
   local review_fn="$4"
+  local updater="$5"
   local tries=0
 
   echo "$label review loop started..."
@@ -242,7 +318,7 @@ review_loop() {
       exit 2
     fi
     echo "- Loop: $tries"
-    echo "- Coder is updating $label..."
+    echo "- $updater is updating $label..."
     "$update_fn"
     echo "- Reviewer is re-checking $label..."
     "$review_fn"
@@ -276,13 +352,13 @@ CODE_FILE=".ai/branches/${BRANCH_PATH}/code-review.md"
 # --- Main workflow ---
 
 echo
-echo "Coder is planning..."
+echo "Planner is planning..."
 run_plan
 
 echo "Reviewer is reviewing the plan..."
 run_plan_review
 
-review_loop "Plan" "$PLAN_FILE" run_plan_update run_plan_review_loop
+review_loop "Plan" "$PLAN_FILE" run_plan_update run_plan_review_loop "Planner"
 
 echo
 echo "Coder is implementing..."
@@ -291,6 +367,6 @@ run_code
 echo "Reviewer is reviewing the code..."
 run_code_review
 
-review_loop "Code" "$CODE_FILE" run_code_fix run_code_review_loop
+review_loop "Code" "$CODE_FILE" run_code_fix run_code_review_loop "Coder"
 
 echo "AI Can Do It finished the workflow."

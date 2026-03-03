@@ -2,7 +2,7 @@
 
 AI Can Do It is a unified Bash launcher that runs a plan-and-implement loop using any supported coder and reviewer CLI pair:
 
-- `bin/aicandoit` accepts `--coder` and `--reviewer` flags; accepted values are `claude`, `codex`, and `cursor`, optionally with a model suffix: `cli/model`.
+- `bin/aicandoit` accepts `--coder`, `--reviewer`, and optional `--planner` flags; accepted values are `claude`, `codex`, and `cursor`, optionally with a model suffix: `cli/model`.
 
 - Author: Mike Lopez <e@mikelopez.com>
 - Copyright (C) 2026 Mike Lopez <e@mikelopez.com>
@@ -13,9 +13,9 @@ AI Can Do It is a unified Bash launcher that runs a plan-and-implement loop usin
 
 1. Accept `--branch <name>` or `--current-branch` plus a prompt.
 2. Switch to the named branch when it exists, create it when it does not, or use the current branch when `--current-branch` is passed.
-3. Run the coder CLI with its workflow skill prefix: `/plan-it` for Claude and Cursor, `$plan-it` for Codex.
+3. Run the planner CLI with its workflow skill prefix: `/plan-it` for Claude and Cursor, `$plan-it` for Codex.
 4. Run the reviewer CLI on the generated plan.
-5. Loop on the coder CLI with `/plan-update` or `$plan-update` plus re-review until `.ai/branches/<branch-slug>/plan-review.md` contains `ALL GOOD`.
+5. Loop on the planner CLI with `/plan-update` or `$plan-update` plus re-review until `.ai/branches/<branch-slug>/plan-review.md` contains `ALL GOOD`.
 6. Run the coder CLI with `/code-it` or `$code-it`.
 7. Run the reviewer CLI on the implementation.
 8. Loop on the coder CLI with `/code-fix` or `$code-fix` plus re-review until `.ai/branches/<branch-slug>/code-review.md` contains `ALL GOOD`.
@@ -31,7 +31,8 @@ The retry loop is controlled by:
 | Flag | Short | Required | Accepted values |
 |---|---|---|---|
 | `--coder` | `-C` | Yes | `cli` or `cli/model`; CLIs: `claude`, `codex`, `cursor` |
-| `--reviewer` | `-R` | Yes | `cli` or `cli/model`; CLIs: `claude`, `codex`, `cursor`; must differ from `--coder` by CLI or model |
+| `--planner` | `-P` | No | `cli` or `cli/model`; CLIs: `claude`, `codex`, `cursor`; defaults to `--coder` |
+| `--reviewer` | `-R` | Yes | `cli` or `cli/model`; CLIs: `claude`, `codex`, `cursor`; must differ from `--coder` and `--planner` by CLI or effective model |
 | `--branch` | `-B` | Unless `--current-branch` | Branch name to switch to or create |
 | `--current-branch` | | Unless `--branch` | Use the current git branch |
 
@@ -47,7 +48,7 @@ Common requirements:
 - `git`
 - [GitHub CLI (`gh`)](https://cli.github.com/)
 
-The CLIs required depend on the values you pass to `--coder` and `--reviewer`:
+The CLIs required depend on the values you pass to `--coder`, `--planner`, and `--reviewer`:
 
 - `claude`: [Claude CLI](https://docs.anthropic.com/en/docs/claude-code)
 - `codex`: [Codex CLI](https://developers.openai.com/codex/cli/)
@@ -78,14 +79,14 @@ chmod +x bin/aicandoit
 
 This repository ships the workflow skills in `skills/`.
 
-Install them for Claude (required when `--coder claude` or `--reviewer claude`):
+Install them for Claude (required when `--coder claude`, `--planner claude`, or `--reviewer claude`):
 
 ```bash
 mkdir -p "$HOME/.claude/skills"
 cp -R skills/. "$HOME/.claude/skills/"
 ```
 
-If you pass `--coder codex` or `--reviewer codex`, also install for Codex:
+If you pass `--coder codex`, `--planner codex`, or `--reviewer codex`, also install for Codex:
 
 ```bash
 mkdir -p "$HOME/.codex/skills"
@@ -101,7 +102,7 @@ Codex invokes these skills with a `$` prefix:
 - `$code-review`
 - `$code-fix`
 
-If you pass `--coder cursor` or `--reviewer cursor`, make sure your `cursor-agent` setup exposes the same workflow commands from this repository:
+If you pass `--coder cursor`, `--planner cursor`, or `--reviewer cursor`, make sure your `cursor-agent` setup exposes the same workflow commands from this repository:
 
 - `/plan-it`
 - `/plan-review`
@@ -119,7 +120,7 @@ git --version
 gh --version
 ```
 
-Verify each CLI you plan to pass to `--coder` or `--reviewer`:
+Verify each CLI you plan to pass to `--coder`, `--planner`, or `--reviewer`:
 
 ```bash
 claude --version
@@ -136,7 +137,7 @@ cursor-agent --version
 ## Usage
 
 ```bash
-aicandoit --coder <cli[/model]> --reviewer <cli[/model]> (--branch <name> | --current-branch) <prompt...>
+aicandoit --coder <cli[/model]> --reviewer <cli[/model]> [--planner <cli[/model]>] (--branch <name> | --current-branch) <prompt...>
 ```
 
 Examples:
@@ -145,6 +146,7 @@ Examples:
 aicandoit --coder claude --reviewer codex --branch feature/api-caching "add caching to API responses"
 aicandoit -C claude -R cursor -B feature/api-caching "add caching to API responses"
 aicandoit --coder claude --reviewer codex --current-branch "fix the login bug"
+aicandoit --planner codex --coder claude --reviewer cursor --current-branch "add model routing"
 aicandoit --coder cursor/composer-1 --reviewer claude/claude-opus-4-6 --current-branch "add model routing"
 aicandoit --coder claude/claude-sonnet-4-6 --reviewer claude/claude-opus-4-6 --current-branch "add feature"
 ```
