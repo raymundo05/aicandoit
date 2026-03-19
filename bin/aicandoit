@@ -376,23 +376,34 @@ resolve_repo_root() {
   )
 }
 
-# Resolve the default branch with remote HEAD and local fallbacks.
-resolve_default_branch() {
+# Resolve the default branch start ref with remote HEAD and local fallbacks.
+resolve_default_start_ref() {
   local default_branch=""
+  local start_ref=""
 
   default_branch="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD | sed 's@^origin/@@')"
-  if [[ -z "$default_branch" ]]; then
-    if git show-ref --verify --quiet refs/remotes/origin/main || git show-ref --verify --quiet refs/heads/main; then
-      default_branch="main"
-    elif git show-ref --verify --quiet refs/remotes/origin/master || git show-ref --verify --quiet refs/heads/master; then
-      default_branch="master"
-    elif git show-ref --verify --quiet refs/remotes/origin/develop || git show-ref --verify --quiet refs/heads/develop; then
-      default_branch="develop"
-    else
-      default_branch="main"
-    fi
+  if [[ -n "$default_branch" ]]; then
+    printf 'origin/%s\n' "$default_branch"
+    return 0
   fi
-  printf '%s\n' "$default_branch"
+
+  if git show-ref --verify --quiet refs/remotes/origin/main; then
+    start_ref="origin/main"
+  elif git show-ref --verify --quiet refs/heads/main; then
+    start_ref="main"
+  elif git show-ref --verify --quiet refs/remotes/origin/master; then
+    start_ref="origin/master"
+  elif git show-ref --verify --quiet refs/heads/master; then
+    start_ref="master"
+  elif git show-ref --verify --quiet refs/remotes/origin/develop; then
+    start_ref="origin/develop"
+  elif git show-ref --verify --quiet refs/heads/develop; then
+    start_ref="develop"
+  else
+    start_ref="main"
+  fi
+
+  printf '%s\n' "$start_ref"
 }
 
 # Build a deterministic worktree path from repo root and branch name.
@@ -438,7 +449,7 @@ is_registered_worktree_for_branch() {
 ensure_worktree_for_branch() {
   local branch="$1"
   local worktree_path="$2"
-  local default_branch="$3"
+  local start_ref="$3"
   local source_checkout_path="$4"
 
   if [[ -e "$worktree_path" ]]; then
@@ -458,7 +469,7 @@ ensure_worktree_for_branch() {
   if git show-ref --verify --quiet "refs/heads/$branch"; then
     git worktree add "$worktree_path" "$branch"
   else
-    git worktree add -b "$branch" "$worktree_path" "origin/$default_branch"
+    git worktree add -b "$branch" "$worktree_path" "$start_ref"
   fi
 }
 
@@ -466,12 +477,12 @@ ensure_worktree_for_branch() {
 
 if [[ "$USE_WORKTREE" == true ]]; then
   REPO_ROOT="$(resolve_repo_root)"
-  DEFAULT_BRANCH="$(resolve_default_branch)"
+  DEFAULT_START_REF="$(resolve_default_start_ref)"
   SOURCE_CHECKOUT_PATH="$(pwd -P)"
   WORKTREE_PATH="$(resolve_worktree_path "$REPO_ROOT" "$BRANCH")"
   echo "Using worktree for branch: $BRANCH"
   echo "Worktree path: $WORKTREE_PATH"
-  ensure_worktree_for_branch "$BRANCH" "$WORKTREE_PATH" "$DEFAULT_BRANCH" "$SOURCE_CHECKOUT_PATH"
+  ensure_worktree_for_branch "$BRANCH" "$WORKTREE_PATH" "$DEFAULT_START_REF" "$SOURCE_CHECKOUT_PATH"
   cd "$WORKTREE_PATH"
 else
   if [[ "$USE_CURRENT_BRANCH" == true ]]; then
