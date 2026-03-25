@@ -50,10 +50,10 @@ With `--worktree`, the launcher uses `<repo-parent>/<repo-name>-worktrees/<branc
 
 Common requirements:
 
-- Linux
-- `bash`
+- `bash` (on Windows, provided by [Git for Windows](https://gitforwindows.org))
 - `git`
 - [GitHub CLI (`gh`)](https://cli.github.com/)
+- [Node.js](https://nodejs.org/) >= 18 (for `npx` / `npm` installation)
 
 The CLIs required depend on the values you pass to `--coder`, `--planner`, and `--reviewer`:
 
@@ -61,19 +61,52 @@ The CLIs required depend on the values you pass to `--coder`, `--planner`, and `
 - `codex`: [Codex CLI](https://developers.openai.com/codex/cli/)
 - `cursor`: `cursor-agent`
 
+### Windows / PowerShell
+
+On Windows, `aicandoit` runs through the bash that ships with Git for Windows.
+Install [Git for Windows](https://gitforwindows.org) and the `aicandoit` Node wrapper
+will locate `bash.exe` automatically. No WSL or manual PATH changes needed.
+
 ## Installation
 
-### 1. Clone the repository
+### Option A: Install globally via npm (recommended)
+
+```bash
+npm install -g aicandoit
+```
+
+This installs the `aicandoit` command globally and copies the workflow skills
+into `~/.claude/skills/` and `~/.codex/skills/` automatically.
+
+Works on Linux, macOS, and Windows (PowerShell, CMD, Git Bash).
+
+### Option B: Run directly with npx (no install)
+
+```bash
+npx aicandoit --coder claude --reviewer codex --current-branch "your prompt"
+```
+
+### Option C: Clone and install manually
+
+#### 1. Clone the repository
 
 ```bash
 git clone https://github.com/easterncoder/aicandoit.git
 cd aicandoit
 ```
 
-### 2. Install the launcher
+#### 2. Install the launcher
+
+On Linux / macOS:
 
 ```bash
 sudo install -m 0755 bin/aicandoit /usr/local/bin/aicandoit
+```
+
+Or install via npm from the cloned repo (works on all platforms including Windows):
+
+```bash
+npm install -g .
 ```
 
 If you prefer to run from the repo directly:
@@ -82,9 +115,11 @@ If you prefer to run from the repo directly:
 chmod +x bin/aicandoit
 ```
 
-### 3. Install the shared skills
+#### 3. Install the shared skills
 
-This repository ships the workflow skills in `skills/`.
+When installed via `npm install -g`, skills are copied automatically during postinstall.
+
+For manual installations, this repository ships the workflow skills in `skills/`.
 
 Install them for Claude (required when `--coder claude`, `--planner claude`, or `--reviewer claude`):
 

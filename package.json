@@ -1,0 +1,38 @@
+{
+  "name": "aicandoit",
+  "version": "1.0.0",
+  "description": "Unified CLI launcher that orchestrates a plan-and-implement workflow using any combination of AI coder CLIs (Claude, Codex, Cursor)",
+  "author": "Mike Lopez <e@mikelopez.com>",
+  "license": "GPL-2.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/easterncoder/aicandoit.git"
+  },
+  "keywords": [
+    "ai",
+    "cli",
+    "claude",
+    "codex",
+    "cursor",
+    "workflow",
+    "planner",
+    "coder",
+    "reviewer"
+  ],
+  "bin": {
+    "aicandoit": "bin/cli.mjs"
+  },
+  "files": [
+    "bin/",
+    "skills/",
+    "LICENSE.txt",
+    "README.md"
+  ],
+  "scripts": {
+    "postinstall": "node bin/postinstall.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module"
+}
