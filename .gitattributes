@@ -1,0 +1,3 @@
+# Force LF line endings for bash scripts so they work on all platforms.
+bin/aicandoit text eol=lf
+*.sh text eol=lf
